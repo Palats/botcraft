@@ -16,17 +16,21 @@
 from setuptools import setup, find_packages
 
 setup(
-    name = 'botcraft',
-    description = 'A minecraft bot library & framework',
+    name = 'botcraft-examples',
+    description = 'Examples bots using botcraft library',
     version = '0.1',
     author = 'Pierre Palatin',
     author_email = 'pierre@palatin.fr',
-    keywords = 'minecraft bot',
+    keywords = 'minecraft bot examples',
     url = 'https://github.com/Palats/botcraft',
     license = 'GPLv2',
-    packages = ['botcraft'],
+    entry_points = {
+        'console_scripts': ['logobot = botcraft_examples.logo:main']
+    },
+    packages = ['botcraft_examples'],
     install_requires = [
-        'Twisted',
+        'botcraft',
+        'lepl',     # For the logo bot
     ],
     # test_suite
     # keywords

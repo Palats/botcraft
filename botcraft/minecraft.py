@@ -24,7 +24,6 @@ import time
 from twisted.internet import reactor, protocol, defer
 from twisted.python import log
 
-from . import util
 from . import messages
 from . import parsing
 from . import packets
@@ -63,7 +62,7 @@ class MCProtocol(protocol.Protocol):
         self.protocol_id = 23
         self.send_spec = messages.protocol[self.protocol_id][0]
         self.receive_spec = messages.protocol[self.protocol_id][1]
-        self.stream = util.Stream()
+        self.stream = parsing.Stream()
 
         self.onConnected()
 
@@ -87,7 +86,7 @@ class MCProtocol(protocol.Protocol):
             msg['raw_bytes'] = self.stream.packet_finished()
             logger.debug("Received message (size %i): %s", len(msg['raw_bytes']), msg)
             return msg
-        except util.PartialPacketException:
+        except parsing.PartialPacketException:
             return None
 
     def dataReceived(self, data):

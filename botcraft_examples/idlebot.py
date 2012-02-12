@@ -2,7 +2,8 @@ from botcraft import builtinbot
 
 
 class Bot(builtinbot.Bot):
-    DEFAULT_NAME = 'idlebot'
+    def onChatMessage(self, msg):
+        print 'Received message from %r: %r' % (msg['username'], msg['text'])
 
 
 def main():

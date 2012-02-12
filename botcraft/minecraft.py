@@ -210,6 +210,13 @@ class MCBot(object):
 
     def chatReceived(self, message):
         logger.info('Chat message: %s', message)
+        m = re.search('^<([^>]+)> (.*)$', message)
+        if not m:
+            logger.warning('Unknown chat message: %s', message)
+            return
+        self.toBot(msgtype=botproto.CHAT_MESSAGE,
+                   username=m.group(1),
+                   text=m.group(2))
 
     def sendChat(self, message):
         msg = {

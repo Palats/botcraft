@@ -2,7 +2,6 @@ import gflags
 from twisted.internet import reactor, protocol, defer
 
 import botcraft
-from . import main
 from . import minecraft
 from . import botproto
 
@@ -16,7 +15,9 @@ class Bot(object):
         self.mcbot.toBot = self.fromServer
 
     def fromServer(self, **kwargs):
-        pass
+        msgtype = kwargs['msgtype']
+        if msgtype == botproto.CHAT_MESSAGE:
+            self.onChatMessage(kwargs)
 
     def toServer(self, **kwargs):
         self.mcbot.fromBot(**kwargs)
@@ -47,3 +48,6 @@ class Bot(object):
                       port=self.port)
 
         botcraft.run()
+
+    def onChatMessage(self, msg):
+        pass

@@ -20,6 +20,8 @@ import sys
 import threading
 import math
 import time
+import collections
+import Queue
 
 from twisted.internet import reactor, protocol, defer
 from twisted.python import log
@@ -125,6 +127,9 @@ class MCBot(object):
         self.factory.onBuildProtocol = self.onBuildProtocol
         self.protocol = None
 
+        self.connect_callback = None
+        self.chat_callbacks = collections.defaultdict(Queue.Queue)
+
     def connect(self, host, port):
         reactor.connectTCP(host, port, self.factory)
 
@@ -201,15 +206,24 @@ class MCBot(object):
         pass
 
     def fromBot(self, msg):
+        callback = defer.Deferred()
         if isinstance(msg, botproto.Connect):
             self.username = msg.username or self.username
             hostname = msg.hostname
             port = msg.port or None
             self.connect(hostname, port)
+            self.connect_callback = callback
         elif isinstance(msg, botproto.Say):
-            msg = {'msgtype': packets.CHAT,
-                   'chat_msg': msg.text[:100]}
-            self.toMinecraft(msg)
+            if len(msg.text) > 100:
+                callback.errback()
+            else:
+                text = msg.text[:100]
+                self.chat_callbacks[text].put(callback)
+                msg = {'msgtype': packets.CHAT,
+                       'chat_msg': msg.text[:100]}
+                self.toMinecraft(msg)
+
+        return callback
 
     def chatReceived(self, message):
         logger.info('Chat message: %s', message)
@@ -217,8 +231,22 @@ class MCBot(object):
         if not m:
             logger.warning('Unknown chat message: %s', message)
             return
-        self.toBot(botproto.ChatMessage(username=m.group(1),
-                                        text=m.group(2)))
+        username = m.group(1)
+        text = m.group(2)
+
+        if username == self.username and text in self.chat_callbacks:
+            callback = self.chat_callbacks[text].get(False)
+            if callback:
+                callback.callback(None)
+
+            if self.chat_callbacks[text].empty():
+                # Remove empty queues so they don't accumulate for everything
+                # that is said on chat. Checking empty() on a queue is not
+                # thread proof, but given that we're using twisted here, and so
+                # are not executing in parallel, we should be fine.
+                del self.chat_callbacks[text]
+
+        self.toBot(botproto.ChatMessage(username=username, text=text))
 
     def _resetMoveTo(self):
         self.target_position = None

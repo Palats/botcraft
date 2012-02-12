@@ -36,7 +36,7 @@ class Bot(object):
 
     def toServer(self, msg):
         """Send the given message to the botcraft server."""
-        self.mcbot.fromBot(msg)
+        return self.mcbot.fromBot(msg)
 
     # Convenience shortcut
     send = toServer

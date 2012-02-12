@@ -183,7 +183,7 @@ class MCBot(object):
 
             if not self.initialized:
                 self.initialized = True
-                self.toBot(msgtype=botproto.SERVER_JOINED)
+                self.toBot(botproto.ServerJoined())
         elif msg['msgtype'] == packets.PRECHUNK:
             # Remove the old chunk data, nothing to do really
             pass
@@ -198,14 +198,14 @@ class MCBot(object):
         else:
             logger.info("Received message (size %i): %s", len(msg['raw_bytes']), msg)
 
-    def toBot(self, **kwargs):
+    def toBot(self, msg):
         pass
 
-    def fromBot(self, **kwargs):
-        if kwargs['msgtype'] == botproto.CONNECT:
-            self.username = kwargs.get('username', None) or self.username
-            hostname = kwargs['hostname']
-            port = kwargs.get('port', None)
+    def fromBot(self, msg):
+        if isinstance(msg, botproto.Connect):
+            self.username = msg.username or self.username
+            hostname = msg.hostname
+            port = msg.port or None
             self.connect(hostname, port)
 
     def chatReceived(self, message):
@@ -214,9 +214,8 @@ class MCBot(object):
         if not m:
             logger.warning('Unknown chat message: %s', message)
             return
-        self.toBot(msgtype=botproto.CHAT_MESSAGE,
-                   username=m.group(1),
-                   text=m.group(2))
+        self.toBot(botproto.ChatMessage(username=m.group(1),
+                                        text=m.group(2)))
 
     def sendChat(self, message):
         msg = {
@@ -230,7 +229,7 @@ class MCBot(object):
         self._on_target = None
 
     def notifyPosition(self):
-        self.toBot(msgtype=botproto.POSITION_CHANGED, position=self.current_position)
+        self.toBot(botproto.PositionChanged(position=self.current_position))
 
     def _backgroundUpdate(self):
         self.notifyPosition()

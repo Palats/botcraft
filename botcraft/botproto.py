@@ -4,17 +4,47 @@
 # Message types
 # All have msgtype
 
-# Server -> Bot
-SERVER_JOINED = 'SERVER_JOINED'
-CHAT_MESSAGE = 'CHAT_MESSAGE'
-POSITION_CHANGED = 'POSITION_CHANGED'
+class Message(object):
+    def __init__(self, **kwargs):
+        self.msgtype = self.__class__.__name__
+        for k, v in kwargs.iteritems():
+            assert hasattr(self, k)
+            setattr(self, k, v)
+
+
+class ServerMessage(Message):
+    pass
+
+class BotMessage(Message):
+    pass
+
+
+# Server -> Bot messages
+class ServerJoined(ServerMessage):
+    pass
+
+class ChatMessage(ServerMessage):
+    text = None
+    username = None
+
+
+class PositionChanged(ServerMessage):
+    position = None
 
 # Bot -> Server
-CONNECT = 'CONNECT'
-SEND_CHAT = 'SEND_CHAT'
-DO_MOVE = 'DO_MOVE'
+class Connect(BotMessage):
+    username = None
+    hostname = None
+    port = None
+
+class SendChat(BotMessage):
+    pass
+
+class DoMove(BotMessage):
+    pass
 
 
+# Helper structures
 class Position(object):
     def __init__(self, source=None):
         if source:

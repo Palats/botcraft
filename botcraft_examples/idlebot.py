@@ -2,7 +2,7 @@ from botcraft import builtinbot
 
 
 class Bot(builtinbot.Bot):
-    pass
+    DEFAULT_NAME = 'idlebot'
 
 
 def main():

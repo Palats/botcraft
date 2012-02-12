@@ -27,6 +27,7 @@ setup(
     packages = ['botcraft'],
     install_requires = [
         'Twisted',
+        'python-gflags',
     ],
     # test_suite
     # keywords

@@ -37,6 +37,8 @@ def parse_args():
                       help="Override logging.conf root log level")
     parser.add_option("--log-file", dest='logfile', metavar="FILE", default=None,
                       help="logging configuration file (optional)")
+    parser.add_option("-n", "--name", dest='name', default="unknownbot",
+                      help="Name of the bot")
     (opts,args) = parser.parse_args()
 
     if not 1 <= len(args) <= 2:
@@ -64,26 +66,7 @@ class LogHandler(logging.StreamHandler):
         super(LogHandler, self).emit(record)
 
 
-class MCBotFactory(protocol.ReconnectingClientFactory):
-    def startedConnecting(self, connector):
-        print 'Started to connect.'
-
-    def buildProtocol(self, addr):
-        print 'Connected. (resetting reconnection delay)'
-        self.resetDelay()
-        return self.mcproto
-
-    def clientConnectionLost(self, connector, reason):
-        print 'Lost connection.  Reason:', reason
-        protocol.ReconnectingClientFactory.clientConnectionLost(self, connector, reason)
-
-    def clientConnectionFailed(self, connector, reason):
-        print 'Connection failed. Reason:', reason
-        protocol.ReconnectingClientFactory.clientConnectionFailed(self, connector,
-                                                                  reason)
-
-
-def main(mcproto):
+def main(bot):
     ch = LogHandler()
     formatter = logging.Formatter(logging.BASIC_FORMAT)
     ch.setFormatter(formatter)
@@ -102,4 +85,3 @@ def main(mcproto):
     reactor.connectTCP(host, port, factory)
 
     reactor.run()
-

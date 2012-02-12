@@ -38,6 +38,9 @@ class Bot(object):
         """Send the given message to the botcraft server."""
         self.mcbot.fromBot(msg)
 
+    # Convenience shortcut
+    send = toServer
+
     def main(self):
         gflags.DEFINE_string(
                 'username', 'unknown',

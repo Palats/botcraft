@@ -1,8 +1,8 @@
-import sys
-
 import gflags
 from twisted.internet import reactor, protocol, defer
 
+import botcraft
+from . import main
 from . import minecraft
 from . import botproto
 
@@ -35,11 +35,7 @@ class Bot(object):
                 'Minecraft server port',
                 short_name='p')
 
-        try:
-          argv = FLAGS(sys.argv)  # parse flags
-        except gflags.FlagsError, e:
-          print '%s\\nUsage: %s ARGS\\n%s' % (e, sys.argv[0], FLAGS)
-          sys.exit(1)
+        botcraft.init()
 
         self.username = FLAGS.username
         self.hostname = FLAGS.hostname
@@ -50,4 +46,4 @@ class Bot(object):
                       hostname=self.hostname,
                       port=self.port)
 
-        reactor.run()
+        botcraft.run()

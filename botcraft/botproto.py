@@ -37,11 +37,8 @@ class Connect(BotMessage):
     hostname = None
     port = None
 
-class SendChat(BotMessage):
-    pass
-
-class DoMove(BotMessage):
-    pass
+class Say(BotMessage):
+    text = None
 
 
 # Helper structures

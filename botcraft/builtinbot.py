@@ -29,8 +29,10 @@ class Bot(object):
         method_name = 'on' + msg.msgtype
         if hasattr(self, method_name):
             getattr(self, method_name)(msg)
+            return True
         else:
-            logging.error('Unknown msgtype %r', msg.msgtype)
+            logging.info('Unhandled msgtype %r', msg.msgtype)
+            return False
 
     def toServer(self, msg):
         """Send the given message to the botcraft server."""
@@ -38,7 +40,7 @@ class Bot(object):
 
     def main(self):
         gflags.DEFINE_string(
-                'username', '',
+                'username', 'unknown',
                 'Bot name.',
                 short_name='n')
         gflags.DEFINE_string(

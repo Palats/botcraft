@@ -106,7 +106,7 @@ class MCProtocol(protocol.Protocol):
 
 class MCBot(object):
     def __init__(self):
-        self.username = 'unknown'
+        self.username = None   # Overridden by the connect message
         self.tick = 0.050
         self.max_move_per_tick = 1.0
 
@@ -206,6 +206,10 @@ class MCBot(object):
             hostname = msg.hostname
             port = msg.port or None
             self.connect(hostname, port)
+        elif isinstance(msg, botproto.Say):
+            msg = {'msgtype': packets.CHAT,
+                   'chat_msg': msg.text[:100]}
+            self.toMinecraft(msg)
 
     def chatReceived(self, message):
         logger.info('Chat message: %s', message)
@@ -215,13 +219,6 @@ class MCBot(object):
             return
         self.toBot(botproto.ChatMessage(username=m.group(1),
                                         text=m.group(2)))
-
-    def sendChat(self, message):
-        msg = {
-                'msgtype': packets.CHAT,
-                'chat_msg': message[:100],
-        }
-        self.toMinecraft(msg)
 
     def _resetMoveTo(self):
         self.target_position = None

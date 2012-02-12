@@ -63,6 +63,7 @@ class LogoBot(botcraft.botbase.MCBot):
             reactor.callLater(0, fullmove_deferred.callback, False)
             return
 
+    def doMove(self, target=None, x=None, y=None, z=None, yaw=None, pitch=None):
         self.draw()
         if not distance:
             reactor.callLater(0, fullmove_deferred.callback, True)
@@ -185,3 +186,6 @@ class LogoBot(botcraft.botbase.MCBot):
 
 def main():
     botcraft.main(LogoBot())
+
+if __name__ == '__main__':
+    main()

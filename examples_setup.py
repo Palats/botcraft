@@ -25,7 +25,10 @@ setup(
     url = 'https://github.com/Palats/botcraft',
     license = 'GPLv2',
     entry_points = {
-        'console_scripts': ['logobot = botcraft_examples.logo:main']
+        'console_scripts': [
+            'idlebot = botcraft_examples.idlebot:main',
+            'logobot = botcraft_examples.logo:main',
+        ]
     },
     packages = ['botcraft_examples'],
     install_requires = [

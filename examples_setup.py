@@ -27,7 +27,7 @@ setup(
     entry_points = {
         'console_scripts': [
             'idlebot = botcraft_examples.idlebot:main',
-            'logobot = botcraft_examples.logo:main',
+            'logobot = botcraft_examples.logobot:main',
         ]
     },
     packages = ['botcraft_examples'],

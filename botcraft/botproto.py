@@ -21,24 +21,56 @@ class BotMessage(Message):
 
 # Server -> Bot messages
 class ServerJoined(ServerMessage):
+    """Server has been joined."""
     pass
 
 class ChatMessage(ServerMessage):
+    """A chat message has been sent on the server.
+
+    Your own messages will trigger this event too.
+    """
     text = None
     username = None
 
 
 class PositionChanged(ServerMessage):
+    """Bot changed position.
+
+    This is sent either when arriving at destination after a successful move or
+    because of an unwarrented move. Intermediate move do not trigger this event.
+    """
     position = None
 
 # Bot -> Server
 class Connect(BotMessage):
+    """Connect to the given minecraft server."""
     username = None
     hostname = None
     port = None
 
 class Say(BotMessage):
+    """Send something on chat."""
     text = None
+
+class Move(BotMessage):
+    """Move to a new position."""
+    target = None
+
+
+class SetActiveTool(BotMessage):
+    """Set the current tool in creative mode."""
+
+    item_id = None
+    item_uses = None
+
+class SetBlock(BotMessage):
+    """Set the given block with new content."""
+
+    x = None
+    y = None
+    z = None
+    item_id = None
+    item_uses = None
 
 
 # Helper structures
@@ -87,6 +119,12 @@ class Position(object):
                 'on_ground': self.on_ground,
         }
         return msg
+
+    def __str__(self):
+        return 'Position(x=%s,y=%s,z=%s,stance=%s,yaw=%s,pitch=%s,on_ground=%s)' % (
+                self.x, self.y, self.z, self.stance,
+                self.yaw, self.pitch,
+                self.on_ground)
 
 
 class Spawn(object):

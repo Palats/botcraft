@@ -119,7 +119,12 @@ class MCBot(object):
         self.players = {}
 
         self.current_position = botproto.Position()
-        self._resetMoveTo()
+        self.active_tool = {
+                'item_id': 0x1,
+                'count': 1,
+                'uses': 0
+        }
+        self._resetMove()
 
         self.initialized = False
 
@@ -182,12 +187,12 @@ class MCBot(object):
                 self.notifyPosition()
                 if self._on_target:
                     reactor.callLater(0, self._on_target.callback, False)
-                self._resetMoveTo()
+                self._resetMove()
                 self._backgroundUpdate()
 
             if not self.initialized:
                 self.initialized = True
-                self.toBot(botproto.ServerJoined())
+                self._toBot(botproto.ServerJoined())
         elif msg['msgtype'] == packets.PRECHUNK:
             # Remove the old chunk data, nothing to do really
             pass
@@ -202,11 +207,18 @@ class MCBot(object):
         else:
             logger.info("Received message (size %i): %s", len(msg['raw_bytes']), msg)
 
+    def _toBot(self, msg):
+        reactor.callLater(0, self.toBot, msg)
+
     def toBot(self, msg):
         pass
 
     def fromBot(self, msg):
         callback = defer.Deferred()
+        reactor.callLater(0, self.dispatchFromBot, msg, callback)
+        return callback
+
+    def dispatchFromBot(self, msg, callback):
         if isinstance(msg, botproto.Connect):
             self.username = msg.username or self.username
             hostname = msg.hostname
@@ -222,8 +234,24 @@ class MCBot(object):
                 msg = {'msgtype': packets.CHAT,
                        'chat_msg': msg.text[:100]}
                 self.toMinecraft(msg)
-
-        return callback
+        elif isinstance(msg, botproto.Move):
+            self._resetMove()
+            self.target_position = msg.target
+            self._on_target = callback
+        elif isinstance(msg, botproto.SetActiveTool):
+            self.active_tool['item_id'] = msg.item_id
+            self.active_tool['uses'] = msg.item_uses
+            mcmsg = {
+                    'msgtype': packets.CREATIVEACTION,
+                    'slot': 36,
+                    'details': self.active_tool,
+            }
+            self.toMinecraft(mcmsg)
+            # There's no feedback on setting the active tool, so just send ok
+            # directly.
+            callback.callback(None)
+        elif isinstance(msg, botproto.SetBlock):
+            self.setBlock(msg)
 
     def chatReceived(self, message):
         logger.info('Chat message: %s', message)
@@ -246,21 +274,21 @@ class MCBot(object):
                 # are not executing in parallel, we should be fine.
                 del self.chat_callbacks[text]
 
-        self.toBot(botproto.ChatMessage(username=username, text=text))
+        self._toBot(botproto.ChatMessage(username=username, text=text))
 
-    def _resetMoveTo(self):
+    def _resetMove(self):
         self.target_position = None
         self._on_target = None
 
     def notifyPosition(self):
-        self.toBot(botproto.PositionChanged(position=self.current_position))
+        self._toBot(botproto.PositionChanged(position=self.current_position))
 
     def _backgroundUpdate(self):
         self.notifyPosition()
         if self.target_position:
             if self.target_position == self.current_position:
                 reactor.callLater(0, self._on_target.callback, True)
-                self._resetMoveTo()
+                self._resetMove()
             else:
                 self.current_position.yaw = self.target_position.yaw
                 self.current_position.pitch = self.target_position.pitch
@@ -289,9 +317,29 @@ class MCBot(object):
         else:
             reactor.callLater(self.tick, self._backgroundUpdate)
 
-    def doMove(self, target, callback):
-        self.target_position = target
-        self._on_target = defer.Deferred()
-        return self._on_target
+    def setBlock(self, msg):
+        mcmsg = {
+                'msgtype': packets.PLAYERBLOCKDIG,
+                'status': 0,
+                'x': msg.x,
+                'y': msg.y+1,  # top face?
+                'z': msg.z,
+                'face': 1,  # +Y
+        }
+        self.toMinecraft(mcmsg)
+        mcmsg['status'] = 2
+        self.toMinecraft(mcmsg)
 
-
+        tool = dict(self.active_tool)
+        if msg.item_id:
+            tool['item_id'] = mcmsg.item_id
+            tool['uses'] = mcmsg.item_uses
+        mcmsg = {
+                'msgtype': packets.PLAYERBLOCKPLACE,
+                'x': msg.x,
+                'y': msg.y,
+                'z': msg.z,
+                'dir': 1,  # +Y
+                'details': tool,
+        }
+        self.toMinecraft(mcmsg)

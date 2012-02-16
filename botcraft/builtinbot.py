@@ -34,12 +34,14 @@ class Bot(object):
             logging.info('Unhandled msgtype %r', msg.msgtype)
             return False
 
-    def toServer(self, msg):
-        """Send the given message to the botcraft server."""
-        return self.mcbot.fromBot(msg)
+    #def toServer(self, msg):
+    #    """Send the given message to the botcraft server."""
+    #    return self.mcbot.fromBot(msg)
 
     # Convenience shortcut
-    send = toServer
+    def send(self, msg):
+        #reactor.callLater(0, self.mcbot.fromBot, msg)
+        return self.mcbot.fromBot(msg)
 
     def main(self):
         gflags.DEFINE_string(
@@ -61,15 +63,9 @@ class Bot(object):
         self.hostname = FLAGS.hostname
         self.port = FLAGS.port
 
-        self.toServer(botproto.Connect(
+        self.send(botproto.Connect(
             username=self.username,
             hostname=self.hostname,
             port=self.port))
 
         botcraft.run()
-
-    def onChatMessage(self, msg):
-        pass
-
-    def onPositionChanged(self, msg):
-        pass

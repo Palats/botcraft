@@ -47,8 +47,8 @@ def init():
     ch = LogHandler()
     formatter = logging.Formatter(logging.BASIC_FORMAT)
     ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.root.setLevel(FLAGS.loglevel.upper())
+    logging.root.addHandler(ch)
+    logging.root.setLevel(FLAGS.loglevel.upper())
 
 
 def run():

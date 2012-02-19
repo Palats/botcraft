@@ -107,7 +107,9 @@ class MCProtocol(protocol.Protocol):
 
 
 class MCBot(object):
-    def __init__(self):
+    def __init__(self, bot_func):
+        self.bot_func = bot_func
+
         self.username = None   # Overridden by the connect message
         self.tick = 0.050
         self.max_move_per_tick = 1.0
@@ -192,7 +194,7 @@ class MCBot(object):
 
             if not self.initialized:
                 self.initialized = True
-                self._toBot(botproto.ServerJoined())
+                self.toBot(botproto.ServerJoined())
         elif msg['msgtype'] == packets.PRECHUNK:
             # Remove the old chunk data, nothing to do really
             pass
@@ -207,11 +209,8 @@ class MCBot(object):
         else:
             logger.info("Received message (size %i): %s", len(msg['raw_bytes']), msg)
 
-    def _toBot(self, msg):
-        reactor.callLater(0, self.toBot, msg)
-
     def toBot(self, msg):
-        pass
+        reactor.callLater(0, self.bot_func, msg)
 
     def fromBot(self, msg):
         callback = defer.Deferred()
@@ -274,14 +273,14 @@ class MCBot(object):
                 # are not executing in parallel, we should be fine.
                 del self.chat_callbacks[text]
 
-        self._toBot(botproto.ChatMessage(username=username, text=text))
+        self.toBot(botproto.ChatMessage(username=username, text=text))
 
     def _resetMove(self):
         self.target_position = None
         self._on_target = None
 
     def notifyPosition(self):
-        self._toBot(botproto.PositionChanged(position=self.current_position))
+        self.toBot(botproto.PositionChanged(position=self.current_position))
 
     def _backgroundUpdate(self):
         self.notifyPosition()

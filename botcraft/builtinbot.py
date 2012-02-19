@@ -14,8 +14,7 @@ FLAGS = gflags.FLAGS
 
 class Bot(object):
     def __init__(self):
-        self.mcbot = minecraft.MCBot()
-        self.mcbot.toBot = self.fromServer
+        self.mcbot = minecraft.MCBot(self.fromServer)
 
     def fromServer(self, msg):
         """Process message received from the botcraft server.

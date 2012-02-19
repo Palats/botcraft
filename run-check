@@ -1,0 +1,5 @@
+#!/bin/bash
+
+BASEDIR=$(dirname $0)
+
+pylint --rcfile "$BASEDIR"/pylintrc "$BASEDIR"/botcraft/*.py "$BASEDIR"/botcraft_examples/*.py

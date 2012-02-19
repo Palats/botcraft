@@ -28,15 +28,9 @@ It probably requires flat landscape to work in practice.
 
 
 import logging
-import re
-import signal
-import sys
-import threading
 import math
-from optparse import OptionParser
-import time
 
-from twisted.internet import reactor, protocol, defer
+from twisted.internet import reactor, defer
 
 from botcraft import builtinbot
 from botcraft import botproto
@@ -48,6 +42,7 @@ logger = logging.getLogger(__name__)
 
 
 class Bot(builtinbot.Bot):
+    """A bot executing logo commands."""
     def __init__(self):
         super(Bot, self).__init__()
 
@@ -60,6 +55,7 @@ class Bot(builtinbot.Bot):
         self.pen_item_uses = 0
 
     def onServerJoined(self, msg):
+        """Botcraft is telling us to get started."""
         # Center bot on the block.
         target = botproto.Position(self.position)
         target.x = math.floor(target.x) + 0.5
@@ -74,9 +70,11 @@ class Bot(builtinbot.Bot):
             self.setPenDetails()]).addCallback(self.setupDone)
 
     def setupDone(self, msgs):
+        """Initial centering and pen setup are done."""
         self.setState(self.stateRunning)
 
     def stateRunning(self, msg):
+        """Nominal state of the bot, executing commands as they come."""
         if isinstance(msg, botproto.ChatMessage):
             cmd = msg.text
             self.logo.parse(cmd)
@@ -85,11 +83,16 @@ class Bot(builtinbot.Bot):
                 self.sendContinue()
 
     def setPenDetails(self):
+        """Change the bot active tool to whatever we're using to draw."""
         return self.send(botproto.SetActiveTool(
             item_id=self.pen_item_id,
             item_uses=self.pen_item_uses))
 
     def moveTo(self, target=None, x=None, y=None, z=None, yaw=None, pitch=None):
+        """Directly move to the indicated position.
+
+        This does *not* draw while moving.
+        """
         target = botproto.Position(target or self.position)
         target.x += x or 0
         target.y += y or 0
@@ -124,15 +127,19 @@ class Bot(builtinbot.Bot):
         position.x += -math.sin(yaw) * distance
         position.z += math.cos(yaw) * distance
 
-        d = self.moveTo(position)
-        d.addCallback(self._continueMove, remaining, fullmove_deferred)
+        self.moveTo(position).addCallback(self._continueMove, remaining, fullmove_deferred)
 
     def startMove(self, distance):
-        d = defer.Deferred()
-        self._continueMove(None, distance, d)
-        return d
+        """Move the given distance.
+
+        Drawing is activated during those move, so the bot will try to move block per block.
+        """
+        callback = defer.Deferred()
+        self._continueMove(None, distance, callback)
+        return callback
 
     def draw(self):
+        """Change block under the player if the pen is activated."""
         if not self.pen:
             return
 
@@ -191,6 +198,7 @@ class Bot(builtinbot.Bot):
 
 
 def main():
+    """Script entry point."""
     Bot().main()
 
 

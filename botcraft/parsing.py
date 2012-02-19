@@ -25,6 +25,11 @@ class PartialPacketException(Exception):
     pass
 
 
+class UnsupportedPacketException(Exception):
+    def __init__(self,pid):
+        Exception.__init__(self,"Unsupported packet id 0x%x" % pid)
+
+
 class Stream(object):
     """Represent a stream of bytes."""
 

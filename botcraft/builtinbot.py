@@ -1,7 +1,29 @@
+# Copyright (C) 2012 Pierre Palatin
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License v2 as published by
+# the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+
+"""Base class for python based bots.
+
+See botcraft_examples for implementation examples.
+"""
+
+
 import logging
 
 import gflags
-from twisted.internet import reactor, protocol, defer
+from twisted.internet import reactor, defer
 
 import botcraft
 from . import minecraft
@@ -13,12 +35,28 @@ FLAGS = gflags.FLAGS
 
 
 class Bot(object):
+    """Base class for python bots.
+
+    This class is made to be inherited from. It only keeps track of the current
+    position and provide basic state machine functionnality.
+
+    Attributes:
+        position: botproto.Position, current known position of the bot. This is
+            not necessarely up to date.
+        state: function, what to call when a message is received. Return value
+            of this function, if not None, will be the new state.
+        mcbot: minecraft.MCBot, the mcbot instance doing the protocol heavy lifting.
+    """
     def __init__(self):
+        self.username = 'unknown'
+        self.hostname = None
+        self.port = None
         self.position = None
         self.state = None
         self.mcbot = minecraft.MCBot(self.fromServer)
 
-    def setState(self, state, *args):
+    def setState(self, state):
+        """Set new function to be called when a message from botcraft is received."""
         oldstate = self.state
         self.state = state
         logger.info('State %s -> %s', oldstate, self.state)
@@ -59,21 +97,20 @@ class Bot(object):
             ack the actual message. Sending is asynchronous - it just queues up
             the message in twisted reactor.
          """
-        d = defer.Deferred()
-        msg.client_tag = d
+        callback = defer.Deferred()
+        msg.client_tag = callback
         reactor.callLater(0, self.mcbot.fromBot, msg)
-        return d
+        return callback
 
     def onPositionChanged(self, msg):
+        """Called when receiving a PositionChanged message.
+
+        By default, update the current position of the bot.
+        """
         self.position = botproto.Position(msg.position)
 
-    def onServerJoined(self, msg):
-        self.state = self.stateJoined
-
-    def stateJoined(self, msg):
-        pass
-
     def start(self, username, hostname, port):
+        """Tell this bot to connect to the given server."""
         self.username = username
         self.hostname = hostname
         self.port = port
@@ -83,6 +120,7 @@ class Bot(object):
             port=self.port))
 
     def main(self):
+        """Helper function to start this bot as standaline programm."""
         gflags.DEFINE_string(
                 'username', 'unknown',
                 'Bot name.',

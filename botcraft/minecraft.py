@@ -13,18 +13,21 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+
+"""Core implementation of botcraft protocol translator.
+
+Botcraft provides a standard bot protocol. This module contains all the logic
+allowing to interface botcraft protocol to a normal minecraft server.
+"""
+
+
 import logging
 import re
-import signal
-import sys
-import threading
 import math
-import time
 import collections
 import Queue
 
-from twisted.internet import reactor, protocol, defer
-from twisted.python import log
+from twisted.internet import reactor, protocol
 
 from . import messages
 from . import parsing
@@ -36,13 +39,22 @@ logger = logging.getLogger(__name__)
 
 
 class MCBotFactory(protocol.ReconnectingClientFactory):
+    """Factory managing the connection to the minecraft server.
+
+    It mainly takes care of reconnecting automatically. All the logic is in
+    MCBot.
+    """
+
+    def __init__(self, protocol_func):
+        self.protocol_func = protocol_func
+
     def startedConnecting(self, connector):
         print 'Started to connect.'
 
     def buildProtocol(self, addr):
         print 'Connected. (resetting reconnection delay)'
         self.resetDelay()
-        return self.onBuildProtocol()
+        return self.protocol_func()
 
     def clientConnectionLost(self, connector, reason):
         print 'Lost connection.  Reason:', reason
@@ -54,10 +66,24 @@ class MCBotFactory(protocol.ReconnectingClientFactory):
                                                                   reason)
 
     def onBuildProtocol(self):
-        pass
+        """Called back when requiring to connect/reconnect."""
 
 
 class MCProtocol(protocol.Protocol):
+    """Minecraft server protocol.
+
+    This takes care of encoding/decoding packets, nothing more.
+    When the connection is done, it calls the provided function with None.
+    Every time a message is completely received, it will call the provided
+    function with it.
+    """
+    def __init__(self, message_func):
+        self.message_func = message_func
+        self.protocol_id = None
+        self.send_spec = None
+        self.receive_spec = None
+        self.stream = None
+
     def connectionMade(self):
         logger.debug('Protocol connectionMade.')
 
@@ -66,14 +92,19 @@ class MCProtocol(protocol.Protocol):
         self.receive_spec = messages.protocol[self.protocol_id][1]
         self.stream = parsing.Stream()
 
-        self.onConnected()
+        self.message_func(None)
 
     def sendMessage(self, msg):
+        """Send the given message to the minecraft server.
+
+        Args:
+            msg: {str:*}, see messages module for the details.
+        """
         msgtype = msg['msgtype']
         msg_emitter = self.send_spec[msgtype]
-        s = msg_emitter.emit(msg)
+        raw = msg_emitter.emit(msg)
         #logger.debug("Sending message (size %i): %s = %r", len(s), msg, s)
-        self.transport.write(s)
+        self.transport.write(raw)
 
     def _parsePacket(self):
         """Parse a single packet out of stream, and return it."""
@@ -92,21 +123,24 @@ class MCProtocol(protocol.Protocol):
             return None
 
     def dataReceived(self, data):
+        """Parse new bytes and notify for minecraft messages when complete."""
         self.stream.append(data)
 
         msg = self._parsePacket()
         while msg:
-            self.onMessage(msg)
+            self.message_func(msg)
             msg = self._parsePacket()
 
-    def onConnected(self):
-        pass
-
-    def onMessage(self, msg):
-        pass
 
 
 class MCBot(object):
+    """Translator between minecraft server protocol and botcraft protocol.
+
+    This class takes care of translating protocols. It takes care of keeping
+    state and updating the bot as needed, while making minecraft happy through
+    various keep alive, preventing fast moves and so on.
+    """
+
     def __init__(self, bot_func):
         self.bot_func = bot_func
 
@@ -128,35 +162,40 @@ class MCBot(object):
                 'count': 1,
                 'uses': 0
         }
+
+        self.target_position = None
+        self.target_tag = None
         self._resetMove()
+
+        self.connect_tag = None
 
         self.initialized = False
 
-        self.factory = MCBotFactory()
-        self.factory.onBuildProtocol = self.onBuildProtocol
+        self.factory = MCBotFactory(self.onBuildProtocol)
         self.protocol = None
 
         self.chat_tags = collections.defaultdict(Queue.Queue)
 
     def connect(self, host, port):
+        """Connect the minecraft side."""
         reactor.connectTCP(host, port, self.factory)
 
     def onBuildProtocol(self):
-        self.protocol = MCProtocol()
-        self.protocol.onConnected = self.onConnected
-        self.protocol.onMessage = self.fromMinecraft
+        """Build a protocol when connecting/reconnecting to minecraft server."""
+        self.protocol = MCProtocol(self.fromMinecraft)
         return self.protocol
 
-    def onConnected(self):
-        self.toMinecraft({'msgtype': packets.HANDSHAKE, 'username': self.username})
-
     def toMinecraft(self, msg):
+        """Send the given message to minecraft server."""
         self.protocol.sendMessage(msg)
 
     def fromMinecraft(self, msg):
         """Message received from minecraft server."""
 
-        if msg['msgtype'] == packets.KEEPALIVE:
+        if msg is None:
+            # Connection has just been established.
+            self.toMinecraft({'msgtype': packets.HANDSHAKE, 'username': self.username})
+        elif msg['msgtype'] == packets.KEEPALIVE:
             self.toMinecraft({'msgtype': packets.KEEPALIVE, 'id': 0})
         elif msg['msgtype'] == packets.LOGIN:
             pass
@@ -212,9 +251,14 @@ class MCBot(object):
             logger.info("Received message (size %i): %s", len(msg['raw_bytes']), msg)
 
     def toBot(self, msg):
+        """Send the given message to the bot.
+
+        This is asynchronous, the message is just queue in twisted reactor.
+        """
         reactor.callLater(0, self.bot_func, msg)
 
     def fromBot(self, msg):
+        """Dispatch a message coming from the bot."""
         if isinstance(msg, botproto.Connect):
             self.username = msg.username or self.username
             hostname = msg.hostname
@@ -250,13 +294,14 @@ class MCBot(object):
             self.setBlock(msg)
 
     def chatReceived(self, message):
+        """Process a minecraft chat message, to send it to the bot."""
         logger.info('Chat message: %s', message)
-        m = re.search('^<([^>]+)> (.*)$', message)
-        if not m:
+        match = re.search('^<([^>]+)> (.*)$', message)
+        if not match:
             logger.warning('Unknown chat message: %s', message)
             return
-        username = m.group(1)
-        text = m.group(2)
+        username = match.group(1)
+        text = match.group(2)
 
         tag = None
         if username == self.username and text in self.chat_tags:
@@ -276,6 +321,13 @@ class MCBot(object):
         self.target_tag = None
 
     def _backgroundUpdate(self):
+        """Keep sending position to minecraft server.
+
+        Minecraft server require a regular update of the position, or will
+        deconnect any client.
+        This method takes care of that, and check when the bot arrives at the
+        current targeted destination.
+        """
         if self.target_position:
             if self.target_position == self.current_position:
                 self.toBot(botproto.PositionChanged(
@@ -291,16 +343,16 @@ class MCBot(object):
                 d_x = self.target_position.x - self.current_position.x
                 d_y = self.target_position.y - self.current_position.y
                 d_z = self.target_position.z - self.current_position.z
-                d = math.sqrt(d_x*d_x + d_y*d_y + d_z*d_z)
-                if d == 0:
-                    r = 0
+                distance = math.sqrt(d_x*d_x + d_y*d_y + d_z*d_z)
+                if distance == 0:
+                    ratio = 0
                 else:
-                    r = min(1.0, self.max_move_per_tick / d)
+                    ratio = min(1.0, self.max_move_per_tick / distance)
 
-                self.current_position.x += r * d_x
-                self.current_position.y += r * d_y
-                self.current_position.z += r * d_z
-                self.current_position.stance += r * d_y
+                self.current_position.x += ratio * d_x
+                self.current_position.y += ratio * d_y
+                self.current_position.z += ratio * d_z
+                self.current_position.stance += ratio * d_y
 
         msg = {'msgtype': packets.PLAYERPOSITIONLOOK}
         msg.update(self.current_position.toMessage())
@@ -312,6 +364,11 @@ class MCBot(object):
             reactor.callLater(self.tick, self._backgroundUpdate)
 
     def setBlock(self, msg):
+        """Bot SetBlock message processing.
+
+        It doesn't try to be subtile here; it just replace the block under the
+        bot with the current tool or the specified block.
+        """
         mcmsg = {
                 'msgtype': packets.PLAYERBLOCKDIG,
                 'status': 0,
@@ -326,8 +383,8 @@ class MCBot(object):
 
         tool = dict(self.active_tool)
         if msg.item_id:
-            tool['item_id'] = mcmsg.item_id
-            tool['uses'] = mcmsg.item_uses
+            tool['item_id'] = msg.item_id
+            tool['uses'] = msg.item_uses
         mcmsg = {
                 'msgtype': packets.PLAYERBLOCKPLACE,
                 'x': msg.x,

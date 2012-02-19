@@ -1,3 +1,6 @@
+"""List of Minecraft server packets IDs."""
+
+
 KEEPALIVE = 0x00
 LOGIN = 0x01
 HANDSHAKE = 0x02

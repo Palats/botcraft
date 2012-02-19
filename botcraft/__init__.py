@@ -14,6 +14,9 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 
+"""Botcraft, a minecraft bot library."""
+
+
 import logging
 import sys
 
@@ -29,6 +32,10 @@ gflags.DEFINE_enum('loglevel', 'error', ['debug', 'info', 'warn', 'error'],
 
 
 class LogHandler(logging.StreamHandler):
+    """Generic log handler for all of botcraft.
+
+    This is currently just regular logging. More might be added in the future.
+    """
     def emit(self, record):
         super(LogHandler, self).emit(record)
 
@@ -39,17 +46,18 @@ def init():
     This must be called before doing anything else.
     """
     try:
-      argv = FLAGS(sys.argv)  # parse flags
+        unused_argv = FLAGS(sys.argv)  # parse flags
     except gflags.FlagsError, e:
-      print '%s\\nUsage: %s ARGS\\n%s' % (e, sys.argv[0], FLAGS)
-      sys.exit(1)
+        print '%s\\nUsage: %s ARGS\\n%s' % (e, sys.argv[0], FLAGS)
+        sys.exit(1)
 
-    ch = LogHandler()
+    handler = LogHandler()
     formatter = logging.Formatter(logging.BASIC_FORMAT)
-    ch.setFormatter(formatter)
-    logging.root.addHandler(ch)
+    handler.setFormatter(formatter)
+    logging.root.addHandler(handler)
     logging.root.setLevel(FLAGS.loglevel.upper())
 
 
 def run():
+    """Start botcraft."""
     reactor.run()

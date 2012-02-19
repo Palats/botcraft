@@ -2,4 +2,11 @@
 
 BASEDIR=$(dirname $0)
 
-pylint --rcfile "$BASEDIR"/pylintrc "$BASEDIR"/botcraft/*.py "$BASEDIR"/botcraft_examples/*.py
+
+FILES=$(ls "$BASEDIR"/botcraft/*.py "$BASEDIR"/botcraft_examples/*.py \
+            | grep -v botcraft/messages.py \
+            | grep -v botcraft/parsing.py \
+            | grep -v botcraft_examples/logolang.py)
+
+#pylint --rcfile "$BASEDIR"/pylintrc "$BASEDIR"/botcraft/*.py "$BASEDIR"/botcraft_examples/*.py
+pylint --rcfile "$BASEDIR"/pylintrc $FILES

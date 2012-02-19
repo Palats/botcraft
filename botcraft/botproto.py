@@ -5,6 +5,8 @@
 # All have msgtype
 
 class Message(object):
+    client_tag = None
+
     def __init__(self, **kwargs):
         self.msgtype = self.__class__.__name__
         for k, v in kwargs.iteritems():
@@ -20,6 +22,10 @@ class BotMessage(Message):
 
 
 # Server -> Bot messages
+class Ack(ServerMessage):
+    """Generic ack message for simple bot commands."""
+
+
 class ServerJoined(ServerMessage):
     """Server has been joined."""
     pass
@@ -32,6 +38,9 @@ class ChatMessage(ServerMessage):
     text = None
     username = None
 
+    # If defined, it means that your Say() message was invalid.
+    invalid_text = None
+
 
 class PositionChanged(ServerMessage):
     """Bot changed position.
@@ -41,30 +50,49 @@ class PositionChanged(ServerMessage):
     """
     position = None
 
+    # When this packet is sent has part of movement requested by the bot, False
+    # will indicate that the movement failed.
+    forced = None
+
 # Bot -> Server
 class Connect(BotMessage):
-    """Connect to the given minecraft server."""
+    """Connect to the given minecraft server.
+
+    Response: ServerJoined
+    """
     username = None
     hostname = None
     port = None
 
 class Say(BotMessage):
-    """Send something on chat."""
+    """Send something on chat.
+
+    Response: ChatMessage
+    """
     text = None
 
 class Move(BotMessage):
-    """Move to a new position."""
+    """Move to a new position.
+
+    Response: PositionChanged
+    """
     target = None
 
 
 class SetActiveTool(BotMessage):
-    """Set the current tool in creative mode."""
+    """Set the current tool in creative mode.
+
+    Response: Ack
+    """
 
     item_id = None
     item_uses = None
 
 class SetBlock(BotMessage):
-    """Set the given block with new content."""
+    """Set the given block with new content.
+
+    Response: Ack
+    """
 
     x = None
     y = None

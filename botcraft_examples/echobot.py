@@ -5,10 +5,10 @@ from botcraft import botproto
 class Bot(builtinbot.Bot):
     def onChatMessage(self, msg):
         if msg.username != self.username:
-            self.send(botproto.Say(text=msg.text)).addCallback(self._dump, msg.text)
+            self.send(botproto.Say(text=msg.text)).addCallback(self._dump)
 
-    def _dump(self, msg, text):
-        print 'I just said %r' % text
+    def _dump(self, msg):
+        print 'I just said %r' % msg.text
 
 
 def main():

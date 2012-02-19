@@ -120,6 +120,8 @@ class MCBot(object):
         self.spawn = botproto.Spawn()
         self.players = {}
 
+        self.connected_tag = None
+
         self.current_position = botproto.Position()
         self.active_tool = {
                 'item_id': 0x1,
@@ -134,8 +136,7 @@ class MCBot(object):
         self.factory.onBuildProtocol = self.onBuildProtocol
         self.protocol = None
 
-        self.connect_callback = None
-        self.chat_callbacks = collections.defaultdict(Queue.Queue)
+        self.chat_tags = collections.defaultdict(Queue.Queue)
 
     def connect(self, host, port):
         reactor.connectTCP(host, port, self.factory)
@@ -186,15 +187,16 @@ class MCBot(object):
             new_position.fromMessage(msg)
             if new_position != self.current_position:
                 self.current_position = new_position
-                self.notifyPosition()
-                if self._on_target:
-                    reactor.callLater(0, self._on_target.callback, False)
+                self.toBot(botproto.PositionChanged(
+                    position=self.current_position,
+                    client_tag=self.target_tag,
+                    forced=True))
                 self._resetMove()
                 self._backgroundUpdate()
 
             if not self.initialized:
                 self.initialized = True
-                self.toBot(botproto.ServerJoined())
+                self.toBot(botproto.ServerJoined(client_tag=self.connect_tag))
         elif msg['msgtype'] == packets.PRECHUNK:
             # Remove the old chunk data, nothing to do really
             pass
@@ -213,30 +215,25 @@ class MCBot(object):
         reactor.callLater(0, self.bot_func, msg)
 
     def fromBot(self, msg):
-        callback = defer.Deferred()
-        reactor.callLater(0, self.dispatchFromBot, msg, callback)
-        return callback
-
-    def dispatchFromBot(self, msg, callback):
         if isinstance(msg, botproto.Connect):
             self.username = msg.username or self.username
             hostname = msg.hostname
             port = msg.port or None
+            self.connect_tag = msg.client_tag
             self.connect(hostname, port)
-            self.connect_callback = callback
         elif isinstance(msg, botproto.Say):
             if len(msg.text) > 100:
-                callback.errback()
+                self.toBot(botproto.ChatMessage(invalid_text='Too long', client_tag=msg.client_tag))
             else:
                 text = msg.text[:100]
-                self.chat_callbacks[text].put(callback)
+                self.chat_tags[text].put(msg.client_tag)
                 msg = {'msgtype': packets.CHAT,
                        'chat_msg': msg.text[:100]}
                 self.toMinecraft(msg)
         elif isinstance(msg, botproto.Move):
             self._resetMove()
             self.target_position = msg.target
-            self._on_target = callback
+            self.target_tag = msg.client_tag
         elif isinstance(msg, botproto.SetActiveTool):
             self.active_tool['item_id'] = msg.item_id
             self.active_tool['uses'] = msg.item_uses
@@ -248,7 +245,7 @@ class MCBot(object):
             self.toMinecraft(mcmsg)
             # There's no feedback on setting the active tool, so just send ok
             # directly.
-            callback.callback(None)
+            self.toBot(botproto.Ack(client_tag=msg.client_tag))
         elif isinstance(msg, botproto.SetBlock):
             self.setBlock(msg)
 
@@ -261,32 +258,30 @@ class MCBot(object):
         username = m.group(1)
         text = m.group(2)
 
-        if username == self.username and text in self.chat_callbacks:
-            callback = self.chat_callbacks[text].get(False)
-            if callback:
-                callback.callback(None)
+        tag = None
+        if username == self.username and text in self.chat_tags:
+            tag = self.chat_tags[text].get(None)
 
-            if self.chat_callbacks[text].empty():
+            if self.chat_tags[text].empty():
                 # Remove empty queues so they don't accumulate for everything
                 # that is said on chat. Checking empty() on a queue is not
                 # thread proof, but given that we're using twisted here, and so
                 # are not executing in parallel, we should be fine.
-                del self.chat_callbacks[text]
+                del self.chat_tags[text]
 
-        self.toBot(botproto.ChatMessage(username=username, text=text))
+        self.toBot(botproto.ChatMessage(username=username, text=text, client_tag=tag))
 
     def _resetMove(self):
         self.target_position = None
-        self._on_target = None
-
-    def notifyPosition(self):
-        self.toBot(botproto.PositionChanged(position=self.current_position))
+        self.target_tag = None
 
     def _backgroundUpdate(self):
-        self.notifyPosition()
         if self.target_position:
             if self.target_position == self.current_position:
-                reactor.callLater(0, self._on_target.callback, True)
+                self.toBot(botproto.PositionChanged(
+                    position=self.current_position,
+                    client_tag=self.target_tag,
+                    forced=False))
                 self._resetMove()
             else:
                 self.current_position.yaw = self.target_position.yaw
@@ -342,3 +337,4 @@ class MCBot(object):
                 'details': tool,
         }
         self.toMinecraft(mcmsg)
+        self.toBot(botproto.Ack(client_tag=msg.client_tag))

@@ -14,6 +14,18 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 
+"""Minecraft logo bot.
+
+This bot will follow any instruction looking like logo given on the chat line.
+Examples:
+    - FD 3   Advance by 3 blocks
+    - LT 90  Turn by 90 degrees to the left
+    - REPEAT 45 [ FD 1 ; LT 8 ]   Draw a circle
+
+See the code for an exhaustive list of functions.
+It probably requires flat landscape to work in practice.
+"""
+
 
 import logging
 import re
@@ -39,8 +51,6 @@ class Bot(builtinbot.Bot):
     def __init__(self):
         super(Bot, self).__init__()
 
-        self.state = 'boot'
-
         self.position = None
         self.current_cmd = None
         self.logo = logolang.Logo()
@@ -49,33 +59,35 @@ class Bot(builtinbot.Bot):
         self.pen_item_id = 0x04
         self.pen_item_uses = 0
 
-    def onPositionChanged(self, msg):
-        self.position = botproto.Position(msg.position)
-        if self.state == 'boot':
-            # Center bot on the block.
-            target = botproto.Position(self.position)
-            target.x = math.floor(target.x) + 0.5
-            target.z = math.floor(target.z) + 0.5
+    def onServerJoined(self, msg):
+        # Center bot on the block.
+        target = botproto.Position(self.position)
+        target.x = math.floor(target.x) + 0.5
+        target.z = math.floor(target.z) + 0.5
 
-            oldy = target.y
-            target.y = math.floor(oldy)
-            target.stance -= oldy - target.y
+        oldy = target.y
+        target.y = math.floor(oldy)
+        target.stance -= oldy - target.y
 
-            self.setState('centering')
-            self.moveTo(target).addCallback(self.centeredDone)
+        defer.DeferredList([
+            self.moveTo(target),
+            self.setPenDetails()]).addCallback(self.setupDone)
 
-    def onChatMessage(self, msg):
-        if self.state == 'waiting':
+    def setupDone(self, msgs):
+        self.setState(self.stateRunning)
+
+    def stateRunning(self, msg):
+        if isinstance(msg, botproto.ChatMessage):
             cmd = msg.text
             self.logo.parse(cmd)
             logging.info('Received new command: %s', cmd)
             if not self.current_cmd:
                 self.sendContinue()
 
-    def setState(self, state):
-        oldstate = self.state
-        self.state = state
-        logger.info('State %s -> %s', oldstate, self.state)
+    def setPenDetails(self):
+        return self.send(botproto.SetActiveTool(
+            item_id=self.pen_item_id,
+            item_uses=self.pen_item_uses))
 
     def moveTo(self, target=None, x=None, y=None, z=None, yaw=None, pitch=None):
         target = botproto.Position(target or self.position)
@@ -85,22 +97,10 @@ class Bot(builtinbot.Bot):
         target.z += z or 0
         target.yaw += yaw or 0
         target.pitch += pitch or 0
-        #d = defer.Deferred()
-        #d.callback(True)
-        #return d
         return self.send(botproto.Move(target=target))
 
-    def centeredDone(self, msg):
-        self.setState('waiting')
-        self.setPenDetails()
-
-    def setPenDetails(self):
-        self.send(botproto.SetActiveTool(
-            item_id=self.pen_item_id,
-            item_uses=self.pen_item_uses))
-
-    def _continueMove(self, success, distance, fullmove_deferred):
-        if not success:
+    def _continueMove(self, msg, distance, fullmove_deferred):
+        if msg and msg.forced:
             reactor.callLater(0, fullmove_deferred.callback, False)
             return
 
@@ -127,9 +127,9 @@ class Bot(builtinbot.Bot):
         d = self.moveTo(position)
         d.addCallback(self._continueMove, remaining, fullmove_deferred)
 
-    def move(self, distance):
+    def startMove(self, distance):
         d = defer.Deferred()
-        self._continueMove(True, distance, d)
+        self._continueMove(None, distance, d)
         return d
 
     def draw(self):
@@ -146,7 +146,7 @@ class Bot(builtinbot.Bot):
 
         logging.info('sendContinue')
         self.current_cmd = None
-        reactor.callFromThread(self._continue)
+        reactor.callLater(0, self._continue)
 
     def _continue(self):
         logging.info('_continue')
@@ -168,9 +168,9 @@ class Bot(builtinbot.Bot):
         elif cmd.name == logolang.RIGHT:
             self.moveTo(yaw=cmd.value).addCallback(self.sendContinue)
         elif cmd.name == logolang.FORWARD:
-            self.move(cmd.value or 1).addCallback(self.sendContinue)
+            self.startMove(cmd.value or 1).addCallback(self.sendContinue)
         elif cmd.name == logolang.BACK:
-            self.move(-cmd.value or -1).addCallback(self.sendContinue)
+            self.startMove(-cmd.value or -1).addCallback(self.sendContinue)
         elif cmd.name == logolang.PENDOWN:
             self.pen = True
             self.draw()
